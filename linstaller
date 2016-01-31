@@ -1,0 +1,235 @@
+#!/bin/bash
+
+DIR=`$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )`
+
+arch=$(if [ `uname -m`=="x86_64" ]; then echo amd64; else echo i386; fi;)
+kernel_mainline="http://kernel.ubuntu.com/~kernel-ppa/mainline/"
+options=( "kernel 4.3.x stable-generic" "kernel 4.3.x stable-low-latency" "latest" )
+usage="$(basename "$0") [-h] [-s n] -- program to calculate the answer to life, the universe and everything
+
+
+where:
+    -h, --help  show this help text
+    -k, --install-kernel install the supplied kernel or downloads
+        one from the repos
+    --ros download and install ROS
+    --conda install anaconda python. Use --conda 2 or --conda 3
+            depending on which python version you want to install
+    --copy-settings copies the dotfiles of a previous install
+    -d, --deb-packages install .deb packages from the deb folder
+    -b, --basic install basic packages for everyday use
+    -t, --tex install packages for tex authoring and texlive
+    -a, --audio install packages for audio ripping, transcoding and editing
+    -g, --games install games such as solitaire, mahjong and others"
+
+
+basic="artha audacity bleachbit build-essential calibre cheese dia frei0r-plugins git goldendict gparted gupnp-dlna-tools gupnp-tools imagemagick keepass2 kodi miniupnpc mypaint nemo-audio-tab nemo-compare nemo-filename-repairer nemo-gtkhash nemo-image-converter nemo-media-columns nemo-seahorse openshot paman paprefs pavucontrol pulseaudio-dlna python-coherence python-nemo shotwell skype soundconverter syncthing syncthing-gtk vlc youtube-dl youtube-dlg "
+wine="gnome-exe-thumbnailer wine wine-mono "
+tex="texstudio texlive "
+audio_edit="ardour mixxx ripit acidrip beets lame mpd "
+programming="cloc meld"
+games="pioneers pyscrabble gnome-games"
+photo="krita inkscape "
+fix_krita() {
+    sudo apt-get install kdelibs-bin
+    kbuildsycoca4 --noincremental
+}
+
+anaconda_install(){
+    mkdir tmp
+    if [ $arch == "amd64" ]; then
+        printf "Downloading https://repo.continuum.io/archive/Anaconda$1-2.4.1-Linux-x86_64.sh ...\n"
+        curl -# -o tmp/anaconda.sh https://repo.continuum.io/archive/Anaconda$1-2.4.1-Linux-x86_64.sh
+        if [ "c9317dcb28a2e0c98c34ebc341e0d145" == $(md5sum tmp/anaconda.sh | cut -d ' ' -f1) ]; then
+            echo sh tmp/anaconda.sh
+        fi
+    else
+        curl -# -o tmp/anaconda.sh https://repo.continuum.io/archive/Anaconda$1-2.4.1-Linux-x86.sh
+        if [ "3fc53407f4a14fe18974d6fb59fc4d3e" == $(md5sum tmp/anaconda.sh | cut -d ' ' -f1) ]; then
+            sh tmp/anaconda.sh
+        fi
+    fi
+    rm -rf tmp
+}
+
+ros_install(){
+    mkdir tmp
+    curl -# -o tmp/ros_install.sh https://raw.githubusercontent.com/oroca/oroca-ros-pkg/master/ros_install.sh
+    chmod 755 tmp/ros_install.sh
+    # ./tmp/ros_install.sh $1 $2
+    cat tmp/ros_install.sh
+    rm -rf tmp
+}
+
+
+install_kernel(){
+    if [ -d "kernel" ]; then
+        echo 'Found kernel folder. Installing the supplied kernel';
+        echo installing kernel...;
+        dpkg -i kernel/*.deb;
+    else
+        printf 'WARNING: kernel folder not found!\n\n'
+        # Select loop
+        select opt in "${options[@]}"; do
+            case $opt in
+                "kernel 4.3.x stable-generic")
+                    ver="v4.3.4-wily/";
+                    ed="generic";
+                    break
+                    ;;
+                "kernel 4.3.x stable-low-latency")
+                    ver="v4.3.4-wily/";
+                    ed="lowlatency";
+                    break
+                    ;;
+                "latest")
+                    ver="v4.5-rc1-wily/";
+                    ed="generic";
+                    break
+                    ;;
+                *)
+                    echo "Error select option 1..3";;
+            esac;
+        done;
+        k_image=$(curl --silent $kernel_mainline/$ver/ | grep -o "linux-image-[a-z0-9\.-]*$ed\_[a-z0-9\.-]*_$arch.deb" | uniq)
+        k_header_all=$(curl --silent $kernel_mainline/$ver/ | grep -o "linux-headers-[0-9\.-]*_[a-z0-9\.-]*_all.deb" | uniq)
+        k_header=$(curl --silent $kernel_mainline/$ver/ | grep -o "linux-headers-[a-z0-9\.-]*-$ed\_[a-z0-9\.-]*_$arch.deb" | uniq)
+        printf 'Making directory kernel and downloading the kernel files...\n'
+        printf "curl $k_image $k_header_all $k_header\n\n"
+        printf "Installing kernel: $k_image\n\n"
+    fi
+}
+install_debs(){
+	for z in ~/projects/*.c; do
+        	test -f "$z" || continue
+        	echo "Working on $z C program..."
+	done;
+}
+
+install_packages(){
+    sudo apt-get update;
+	sudo apt-get -f -s install $1;
+}
+
+
+
+
+while :; do
+    case $1 in
+        -h|-\?|--help)   # Call a "show_help" function to display a synopsis, then exit.
+            echo "$usage"
+	    exit
+            ;;
+        --conda)       # Takes an option argument, ensuring it has been specified.
+            if [ -n "$2" ]; then
+                if [ "$2" == "2" ] || [ "$2" == "3" ]; then
+                    conda_v=$2
+                    shift
+                    anaconda_install $conda_v
+                else
+                    printf 'ERROR: "--conda" requires a version 2 or 3.\n' >&2
+                    exit 1
+                fi
+            else
+                printf 'ERROR: "--file" requires a non-empty option argument.\n' >&2
+                exit 1
+            fi
+            ;;
+        --ros)       # Takes an option argument, ensuring it has been specified.
+            ros=true
+            ;;
+	    -k|--install-kernel)    #
+            k=true
+            ;;
+        --copy-settings)    #
+            cp_sett=true
+            ;;
+        -b|--basic)    #
+            packages="$packages$basic"
+            printf "Adding the neccessary repositories...\n"
+            # Add the release PGP keys:
+            curl -s https://syncthing.net/release-key.txt | sudo apt-key add -
+
+            # Add the "release" channel to your APT sources:
+            echo "deb http://apt.syncthing.net/ syncthing release" | sudo tee /etc/apt/sources.list.d/syncthing.list
+
+            # For syncthing-gtk
+            sudo add-apt-repository -y ppa:nilarimogard/webupd8
+
+            sudo apt-add-repository -y ppa:qos/pulseaudio-dlna
+            sudo apt-add-repository -y ppa:team-xbmc/ppa
+            sudo apt-add-repository -y ppa:videolan/stable-daily
+            sudo apt-add-repository -y ppa:mc3man/trusty-media
+            ;;
+        -t|--tex)    #
+            packages="$packages$tex"
+            ;;
+        -g|--games)    #
+            packages="$packages$games"
+            ;;
+        -a|--audio)    #
+            packages="$packages$audio_edit"
+            ;;
+	    -d|--deb-packages)    #
+    	    count=`ls -1 deb/*.deb 2>/dev/null | wc -l`
+    	    if [ $count != 0 ]; then
+    			d=true
+
+    	    else
+    		printf 'ERROR: In order to use the "--deb-packages" you need a folder with .deb files' >&2
+    		exit
+    	    fi
+            ;;
+        -v|--verbose)
+            verbose=$((verbose + 1)) # Each -v argument adds 1 to verbosity.
+            ;;
+        --)              # End of all options.
+            shift
+            break
+            ;;
+        -?*)
+            printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+            ;;
+        *)               # Default case: If no more options then break out of the loop.
+            break
+    esac
+
+    shift
+done
+
+
+# Main process
+echo -n 'Checking if "curl" is installed on your system...'
+dpkg -l | grep -qw curl || $(printf 'curl not found! Installing now.\n\n'; apt-get install curl)
+printf 'curl is installed.\n\n'
+
+if [ $k ]; then
+    install_kernel
+fi
+if [ $d ]; then
+	for package in deb/*.deb; do
+		echo installing "$package"
+        sudo dpkg --simulate -i $package
+	done;
+    apt-get -s -f install
+fi
+echo $packages
+if [ -n "$packages"  ]; then
+    install_packages "$packages"
+fi
+
+if [ $cp_sett ]; then
+    if [ -e "dotfiles"]; then
+        rsync -hP dotfiles ~/ && printf "Trasfer completed." || printf "An ERROR occured."
+    else
+        printf "You don't have any settings to copy, ABORTING!\n\n"
+    fi
+fi
+
+if [ $ros ]; then
+    echo -n "Give a name for your catkin workspace: " && read catkin
+    select ros_distro in indigo jade hydro; do
+        ros_install $catkin $ros_distro
+        break;
+    done;
+fi
