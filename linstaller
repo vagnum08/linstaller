@@ -5,7 +5,7 @@ DIR=`$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )`
 arch=$(if [ `uname -m`=="x86_64" ]; then echo amd64; else echo i386; fi;)
 kernel_mainline="http://kernel.ubuntu.com/~kernel-ppa/mainline/"
 options=( "kernel 4.3.x stable-generic" "kernel 4.3.x stable-low-latency" "latest" )
-usage="$(basename "$0") [-h] [-s n] -- program to calculate the answer to life, the universe and everything
+usage="$(basename "$0") [-h] [-d] [-b] [--conda n ] -- install kernel and other easily using predefined set of applications
 
 
 where:
@@ -27,9 +27,10 @@ basic="artha audacity bleachbit build-essential calibre cheese dia frei0r-plugin
 wine="gnome-exe-thumbnailer wine wine-mono "
 tex="texstudio texlive "
 audio_edit="ardour mixxx ripit acidrip beets lame mpd "
-programming="cloc meld"
-games="pioneers pyscrabble gnome-games"
+programming="cloc meld "
+games="pioneers pyscrabble gnome-games "
 photo="krita inkscape "
+
 fix_krita() {
     sudo apt-get install kdelibs-bin
     kbuildsycoca4 --noincremental
@@ -99,6 +100,7 @@ install_kernel(){
         printf "Installing kernel: $k_image\n\n"
     fi
 }
+
 install_debs(){
 	for z in ~/projects/*.c; do
         	test -f "$z" || continue
