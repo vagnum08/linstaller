@@ -5,22 +5,24 @@ DIR=`$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )`
 arch=$(if [ `uname -m`=="x86_64" ]; then echo amd64; else echo i386; fi;)
 kernel_mainline="http://kernel.ubuntu.com/~kernel-ppa/mainline/"
 options=( "kernel 4.3.x stable-generic" "kernel 4.3.x stable-low-latency" "latest" )
-usage="$(basename "$0") [-h] [-d] [-b] [--conda n ] -- install kernel and other easily using predefined set of applications
+usage="$(basename "$0") [-h] [-d] [-b] [--conda n ] -- install kernel and other software easily using cli
 
 
 where:
     -h, --help  show this help text
-    -k, --install-kernel install the supplied kernel or downloads
+    -k, --install-kernel    install the supplied kernel or downloads
         one from the repos
-    --ros download and install ROS
-    --conda install anaconda python. Use --conda 2 or --conda 3
+    --ros     download and install ROS
+    --conda    install anaconda python. Use --conda 2 or --conda 3
             depending on which python version you want to install
     --copy-settings copies the dotfiles of a previous install
-    -d, --deb-packages install .deb packages from the deb folder
-    -b, --basic install basic packages for everyday use
-    -t, --tex install packages for tex authoring and texlive
-    -a, --audio install packages for audio ripping, transcoding and editing
-    -g, --games install games such as solitaire, mahjong and others"
+    -d, --deb-packages     install .deb packages from the deb folder
+    -b, --basic    install basic packages for everyday use
+    -t, --tex      install packages for tex authoring and texlive
+    -a, --audio    install packages for audio ripping, transcoding and editing
+    -g, --games    install games such as solitaire, mahjong and others
+    -p, --photo    install krita and inkscape
+    --opencv    install the latest opencv "
 
 
 basic="artha audacity bleachbit build-essential calibre cheese dia frei0r-plugins git goldendict gparted gupnp-dlna-tools gupnp-tools imagemagick keepass2 kodi miniupnpc mypaint nemo-audio-tab nemo-compare nemo-filename-repairer nemo-gtkhash nemo-image-converter nemo-media-columns nemo-seahorse openshot paman paprefs pavucontrol pulseaudio-dlna python-coherence python-nemo shotwell skype soundconverter syncthing syncthing-gtk vlc youtube-dl youtube-dlg "
@@ -34,6 +36,11 @@ photo="krita inkscape "
 fix_krita() {
     sudo apt-get install kdelibs-bin
     kbuildsycoca4 --noincremental
+}
+
+function die ( ) {
+   echo $@
+   exit 1
 }
 
 anaconda_install(){
@@ -57,11 +64,23 @@ ros_install(){
     mkdir tmp
     curl -# -o tmp/ros_install.sh https://raw.githubusercontent.com/oroca/oroca-ros-pkg/master/ros_install.sh
     chmod 755 tmp/ros_install.sh
-    # ./tmp/ros_install.sh $1 $2
-    cat tmp/ros_install.sh
+    ./tmp/ros_install.sh $1 $2
     rm -rf tmp
 }
 
+
+opencv_install(){
+	mkdir tmp
+	printf "Downloading install scripts..."
+	curl -# -o tmp/dependencies.sh https://raw.githubusercontent.com/jayrambhia/Install-OpenCV/master/Ubuntu/dependencies.sh
+	curl -# -o tmp/opencv_install.sh https://raw.githubusercontent.com/jayrambhia/Install-OpenCV/master/Ubuntu/opencv_install.sh
+	chmod +x tmp/opencv_install.sh
+	printf "You are going to install opencv libraries."
+	read -p "Continue (Y/n)?  "
+	[ "$REPLY" == y ] || rm -rf tmp && die "Exiting..."
+	./opencv_install.sh
+	rm -rf tmp
+}
 
 install_kernel(){
     if [ -d "kernel" ]; then
@@ -95,18 +114,19 @@ install_kernel(){
         k_image=$(curl --silent $kernel_mainline/$ver/ | grep -o "linux-image-[a-z0-9\.-]*$ed\_[a-z0-9\.-]*_$arch.deb" | uniq)
         k_header_all=$(curl --silent $kernel_mainline/$ver/ | grep -o "linux-headers-[0-9\.-]*_[a-z0-9\.-]*_all.deb" | uniq)
         k_header=$(curl --silent $kernel_mainline/$ver/ | grep -o "linux-headers-[a-z0-9\.-]*-$ed\_[a-z0-9\.-]*_$arch.deb" | uniq)
-        printf 'Making directory kernel and downloading the kernel files...\n'
-        printf "curl $k_image $k_header_all $k_header\n\n"
+        printf 'Making directory kernel and downloading the kernel files...\n\n'
+	mkdir kernel
+	echo Downloading $k_image...
+	curl -# -o kernel/$k_image $kernel_mainline/$ver/$k_image
+	echo Downloading $k_header_all ...
+	curl -# -o kernel/$k_header_all $kernel_mainline/$ver/$k_header_all
+	echo Downloading $k_header ...
+	curl -# -o kernel/$k_header $kernel_mainline/$ver/$k_header
         printf "Installing kernel: $k_image\n\n"
+	#dpkg -i kernel/*.deb;
     fi
 }
 
-install_debs(){
-	for z in ~/projects/*.c; do
-        	test -f "$z" || continue
-        	echo "Working on $z C program..."
-	done;
-}
 
 install_packages(){
     sudo apt-get update;
@@ -137,16 +157,19 @@ while :; do
                 exit 1
             fi
             ;;
-        --ros)       # Takes an option argument, ensuring it has been specified.
+        --ros)    
             ros=true
             ;;
-	    -k|--install-kernel)    #
+	-k|--install-kernel)
             k=true
             ;;
-        --copy-settings)    #
+	--opencv)
+            opencv_install
+	    ;;
+        --copy-settings)   
             cp_sett=true
             ;;
-        -b|--basic)    #
+        -b|--basic)   
             packages="$packages$basic"
             printf "Adding the neccessary repositories...\n"
             # Add the release PGP keys:
@@ -163,16 +186,20 @@ while :; do
             sudo apt-add-repository -y ppa:videolan/stable-daily
             sudo apt-add-repository -y ppa:mc3man/trusty-media
             ;;
-        -t|--tex)    #
+        -t|--tex)    
             packages="$packages$tex"
             ;;
-        -g|--games)    #
+        -g|--games)    
             packages="$packages$games"
             ;;
-        -a|--audio)    #
+        -a|--audio)    
             packages="$packages$audio_edit"
             ;;
-	    -d|--deb-packages)    #
+	-p|--photo)    
+            packages="$packages$photo"
+	    fixkrita=true
+            ;;
+	-d|--deb-packages)    
     	    count=`ls -1 deb/*.deb 2>/dev/null | wc -l`
     	    if [ $count != 0 ]; then
     			d=true
@@ -211,13 +238,16 @@ fi
 if [ $d ]; then
 	for package in deb/*.deb; do
 		echo installing "$package"
-        sudo dpkg --simulate -i $package
+        sudo dpkg -i $package
 	done;
-    apt-get -s -f install
+    apt-get -f install
 fi
 echo $packages
 if [ -n "$packages"  ]; then
     install_packages "$packages"
+    if [ $fixkrita ]; then
+	fix_krita;
+    fi
 fi
 
 if [ $cp_sett ]; then
