@@ -22,7 +22,8 @@ where:
     -a, --audio    install packages for audio ripping, transcoding and editing
     -g, --games    install games such as solitaire, mahjong and others
     -p, --photo    install krita and inkscape
-    --opencv    install the latest opencv "
+    --opencv    install the latest opencv
+    --panamax   install Panamax, Docker manager"
 
 
 basic="artha audacity bleachbit build-essential calibre cheese dia frei0r-plugins git goldendict gparted gupnp-dlna-tools gupnp-tools imagemagick keepass2 kodi miniupnpc mypaint nemo-audio-tab nemo-compare nemo-filename-repairer nemo-gtkhash nemo-image-converter nemo-media-columns nemo-seahorse openshot paman paprefs pavucontrol pulseaudio-dlna python-coherence python-nemo shotwell skype soundconverter syncthing syncthing-gtk vlc youtube-dl youtube-dlg "
@@ -44,23 +45,58 @@ function die ( ) {
 }
 
 anaconda_install(){
+    echo You are about to install Anaconda $1
+    read -p "Continue (y/n)?  "
+	[ "$REPLY" == y ] || die "Exiting..."
     mkdir tmp
     if [ $arch == "amd64" ]; then
-        printf "Downloading https://repo.continuum.io/archive/Anaconda$1-2.4.1-Linux-x86_64.sh ...\n"
-        curl -# -o tmp/anaconda.sh https://repo.continuum.io/archive/Anaconda$1-2.4.1-Linux-x86_64.sh
-        if [ "c9317dcb28a2e0c98c34ebc341e0d145" == $(md5sum tmp/anaconda.sh | cut -d ' ' -f1) ]; then
-            echo sh tmp/anaconda.sh
-        fi
+        file=Anaconda$1-2.4.1-Linux-x86_64.sh
     else
-        curl -# -o tmp/anaconda.sh https://repo.continuum.io/archive/Anaconda$1-2.4.1-Linux-x86.sh
-        if [ "3fc53407f4a14fe18974d6fb59fc4d3e" == $(md5sum tmp/anaconda.sh | cut -d ' ' -f1) ]; then
-            sh tmp/anaconda.sh
-        fi
+        file=Anaconda$1-2.4.1-Linux-x86.sh
     fi
+    printf "Downloading $file ...\n"
+    curl -# -o tmp/$file https://repo.continuum.io/archive/$file
+    md5sum -c
+    sh tmp/$file
     rm -rf tmp
 }
 
+
+
+
+panamax_install(){
+    echo You are about to install Panamax
+    read -p "Continue (y/n)?  "
+	[ "$REPLY" == y ] || die "Exiting..."
+    mkdir tmp
+    printf "Installx86_64ing dependencies\n"
+    printf "Virtualbox...\n"
+    sudo apt-get install virtualbox
+    printf "Vagrant...\n"
+    printf "Downloading Vagrant\n"
+    curl -o tmp/sha256sums https://releases.hashicorp.com/vagrant/1.8.1/vagrant_1.8.1_SHA256SUMS
+    if [ $arch == "amd64" ]; then
+        file=vagrant_1.8.1_x86_64.deb
+    else
+        file=vagrant_1.8.1_i686.deb
+    fi
+    printf "Downloading vagrant_1.8.1_$ver.deb ...\n"
+    curl -# -o tmp/$file https://releases.hashicorp.com/vagrant/1.8.1/$file
+    sha256sum -c sha256sums | grep OK || break
+    dpkg -i $file
+    printf "Downloading and installing Panamax...\n"
+    curl -# -o tmp/ubuntu.sh http://download.panamax.io/installer/ubuntu.sh
+    bash ubuntu.sh
+    rm -rf tmp
+}
+
+
+
+
 ros_install(){
+    echo You are about to install ROS $2
+    read -p "Continue (y/n)?  "
+	[ "$REPLY" == y ] || die "Exiting..."
     mkdir tmp
     curl -# -o tmp/ros_install.sh https://raw.githubusercontent.com/oroca/oroca-ros-pkg/master/ros_install.sh
     chmod 755 tmp/ros_install.sh
@@ -72,14 +108,11 @@ ros_install(){
 opencv_install(){
 	mkdir tmp
 	printf "Downloading install scripts..."
-	curl -# -o tmp/dependencies.sh https://raw.githubusercontent.com/jayrambhia/Install-OpenCV/master/Ubuntu/dependencies.sh
-	curl -# -o tmp/opencv_install.sh https://raw.githubusercontent.com/jayrambhia/Install-OpenCV/master/Ubuntu/opencv_install.sh
-	chmod +x tmp/opencv_install.sh
-	printf "You are going to install opencv libraries."
-	read -p "Continue (Y/n)?  "
-	[ "$REPLY" == y ] || rm -rf tmp && die "Exiting..."
-	./opencv_install.sh
-	rm -rf tmp
+	git clone https://github.com/jayrambhia/Install-OpenCV.git
+	read -p "Continue (y/n)?  "
+	[ "$REPLY" == y ] || rm -rf Install-OpenCV && die "Exiting..."
+    ./Install-OpenCV/Ubuntu/opencv_latest.sh
+	rm -rf Install-OpenCV
 }
 
 install_kernel(){
@@ -122,8 +155,10 @@ install_kernel(){
 	curl -# -o kernel/$k_header_all $kernel_mainline/$ver/$k_header_all
 	echo Downloading $k_header ...
 	curl -# -o kernel/$k_header $kernel_mainline/$ver/$k_header
-        printf "Installing kernel: $k_image\n\n"
-	#dpkg -i kernel/*.deb;
+    printf "Installing kernel: $k_image\n\n"
+    read -p "Continue (y/n)?  "
+    [ "$REPLY" == y ] || die "Exiting..."
+	dpkg -i kernel/*.deb;
     fi
 }
 
@@ -157,19 +192,22 @@ while :; do
                 exit 1
             fi
             ;;
-        --ros)    
+        --ros)
             ros=true
             ;;
-	-k|--install-kernel)
+	    -k|--install-kernel)
             k=true
             ;;
-	--opencv)
+	    --opencv)
             opencv_install
-	    ;;
-        --copy-settings)   
+	        ;;
+        --panamax)
+            panamax_install
+            ;;
+        --copy-settings)
             cp_sett=true
             ;;
-        -b|--basic)   
+        -b|--basic)
             packages="$packages$basic"
             printf "Adding the neccessary repositories...\n"
             # Add the release PGP keys:
@@ -186,20 +224,20 @@ while :; do
             sudo apt-add-repository -y ppa:videolan/stable-daily
             sudo apt-add-repository -y ppa:mc3man/trusty-media
             ;;
-        -t|--tex)    
+        -t|--tex)
             packages="$packages$tex"
             ;;
-        -g|--games)    
+        -g|--games)
             packages="$packages$games"
             ;;
-        -a|--audio)    
+        -a|--audio)
             packages="$packages$audio_edit"
             ;;
-	-p|--photo)    
+	-p|--photo)
             packages="$packages$photo"
 	    fixkrita=true
             ;;
-	-d|--deb-packages)    
+	-d|--deb-packages)
     	    count=`ls -1 deb/*.deb 2>/dev/null | wc -l`
     	    if [ $count != 0 ]; then
     			d=true
