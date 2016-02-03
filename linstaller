@@ -82,11 +82,14 @@ panamax_install(){
     fi
     printf "Downloading vagrant_1.8.1_$ver.deb ...\n"
     curl -# -o tmp/$file https://releases.hashicorp.com/vagrant/1.8.1/$file
-    sha256sum -c sha256sums | grep OK || break
+	cat tmp/sha256sums | grep $file > tmp/sums
+	cd tmp
+    sha256sum -c sums | grep OK || break
     dpkg -i $file
     printf "Downloading and installing Panamax...\n"
-    curl -# -o tmp/ubuntu.sh http://download.panamax.io/installer/ubuntu.sh
+    curl -# -o ubuntu.sh http://download.panamax.io/installer/ubuntu.sh
     bash ubuntu.sh
+	cd ../
     rm -rf tmp
 }
 
